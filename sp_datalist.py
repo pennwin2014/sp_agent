@@ -1,10 +1,14 @@
 # coding=utf-8
 import sys, struct, socket
-import datetime
-import os
+import sp_log_handler
 
 FRAME_LENGTH = 16
-
+DATA_HEADER_CPY_STR = "<3sBH2sI"
+DATA_HEADER_LEN = 12
+TRANSDTL_CPY_STR = "<IIH3sIB6s6sIHI3s6s6s4sB2s2s"  # "IIH3sIB6s6sIBI3s6s6s4sB2s2s144s"
+FLAG_SEND = True
+FLAG_RECV = False
+gloabal_log_handler = sp_log_handler.sp_log_handler()
 
 class sp_trans_unit:
     def __init__(self):
@@ -29,7 +33,6 @@ class sp_trans_unit:
         else:
             self.flen, self.fid, self.fchecksum, \
             self.findex, self.fdatalen, self.fdata = struct.unpack("<2I2B2s4s", recv_data)
-
 
 class sp_datalist_handler:
     def __init__(self):
@@ -64,7 +67,6 @@ class sp_datalist_handler:
         else:
             return 0
 
-
     def append_normal_data(self, fid, fdata):
         index = self.get_index_by_fid(fid)
         if index < 0:
@@ -90,11 +92,9 @@ class sp_datalist_handler:
             # 如果数据长度拼起来是最后一个，则处理该数据并清空列表
             pass_unt.unpack_normal_unit(buf)
             ret = self.append_normal_data(pass_unt.fid, pass_unt.fdata)
-        if ret == 2:  # 最后一个帧
-            do_something_with_data(s, self, pass_unt.fid)
-            self.clear_list_elems(pass_unt.fid)
-        else:
+        if(ret != 2):
             self.data_list[index].append(buf)
+        return ret
 
 
     def clear_list_elems(self, fid):
@@ -112,7 +112,7 @@ class sp_datalist_handler:
             print u"该列表元素个数={0}".format(len(self.data_list[index]))
             print self.data_list[index]
             print u"接收到的数据："
-            print_hex(self.data_list[index][2])
+            gloabal_log_handler.print_hex(self.data_list[index][2])
             print u"总数据长度:{0}, 有效数据长度:{1}".format(len(self.data_list[index][2]), self.data_list[index][1])
         else:
             print u"该fid不存在列表！"
@@ -124,14 +124,6 @@ class sp_datalist_handler:
             return None
         m_str = self.data_list[index][2]
         return m_str
-
-
-# DATA_CPY_STR = "<3sBH2s207sB"
-DATA_HEADER_CPY_STR = "<3sBH2sI"
-DATA_HEADER_LEN = 12
-
-TRANSDTL_CPY_STR = "<IIH3sIB6s6sIHI3s6s6s4sB2s2s"  # "IIH3sIB6s6sIBI3s6s6s4sB2s2s144s"
-
 
 class sp_tcp_unit:
     def __init__(self):
@@ -147,17 +139,14 @@ class sp_tcp_unit:
     def parse_data(self, data):
         self.guide_code, self.cmd_code, self.data_len, self.machine_addr, self.seqno = struct.unpack(
             DATA_HEADER_CPY_STR, data[0:DATA_HEADER_LEN])
-        print "parse data_len = {0}".format(self.data_len)
+        print "data_len = {0}".format(self.data_len)
         self.data = data[DATA_HEADER_LEN:DATA_HEADER_LEN + self.data_len]
-        print "data=[{0:02x}{1:02x}{2:02x}{3:02x}{4:02x}]".format(ord(self.data[0]), ord(self.data[1]),
-                                                                  ord(self.data[2]), ord(self.data[3]),
-                                                                  ord(self.data[4]))
+        print "data=",
+        for i in range(0, self.data_len):
+            print "{0:02x}".format(ord(self.data[i])),
         self.check_sum = data[DATA_HEADER_LEN + self.data_len]
-        print "checksum={0:02x}".format(ord(self.check_sum))
-        """
-        self.guide_code, self.cmd_code, self.data_len, self.machine_addr, self.data, self.check_sum = struct.unpack(
-            DATA_CPY_STR, data)
-        """
+        print "\nchecksum={0:02x}".format(ord(self.check_sum))
+
 
     @staticmethod
     def get_check_sum(data, frame_index):
@@ -189,7 +178,7 @@ class sp_tcp_unit:
         data += self.data
         data += self.check_sum
         """
-        sp_brief_log(data, True)#记录发送日志
+        gloabal_log_handler.sp_brief_log(data, FLAG_SEND)  # 记录发送日志
         # print u"组第一个帧前LEN= {0}".format(len(data))
         tmp_data = struct.pack("<H", len(data))
         tmp_data += data[0:4]
@@ -209,182 +198,7 @@ class sp_tcp_unit:
         # print_hex(pack_data)
         return pack_data
 
-
-def sp_transdtl_log(transdtl, fid):
-    path = u"transdtl_logs"
-    # title = u"{0}".format(datetime.date.today())
-    #new_path = os.path.join(path, title)
-    #sub_title = u"transdtl_logs"
-    #new_path = os.path.join(new_path, sub_title)
-    new_path = path
-    if not os.path.isdir(new_path):
-        os.makedirs(new_path)
-    fileHandler = open(
-        new_path + "\\{0}.log".format(datetime.date.today()), 'a')
-    fileHandler.write("====================\ntime={0:02d}:{1:02d}:{2:02d}, fid={3}\n=================={4}\n".format(
-        datetime.datetime.now().hour, datetime.datetime.now().minute,
-        datetime.datetime.now().second, fid, transdtl))
-    fileHandler.close()
-
-
-def sp_brief_log(m_str, issend):
-    path = u"logs"
-    title = u"{0}".format(datetime.date.today())
-    new_path = os.path.join(path, title)
-    if issend:
-        sub_title = u"send_brief_logs"
-    else:
-        sub_title = u"recv_brief_logs"
-    new_path = os.path.join(new_path, sub_title)
-    if not os.path.isdir(new_path):
-        os.makedirs(new_path)
-    fileHandler = open(
-        new_path + "\\{0:02d}{1:02d}{2:02d}.log".format(datetime.datetime.now().hour, datetime.datetime.now().minute,
-                                                        datetime.datetime.now().second), 'a')
-    fileHandler.write("数据总字节数={0}\n".format(len(m_str)))
-    for i in range(0, len(m_str), 1):
-        fileHandler.write("[{0:02x}]".format(ord(m_str[i])))
-    fileHandler.close()
-
-
-def sp_detail_log(m_str, issend):
-    path = u"logs"
-    title = u"{0}".format(datetime.date.today())
-    new_path = os.path.join(path, title)
-    if issend:
-        sub_title = u"send_detail_logs"
-    else:
-        sub_title = u"recv_detail_logs"
-    new_path = os.path.join(new_path, sub_title)
-    if not os.path.isdir(new_path):
-        os.makedirs(new_path)
-    fileHandler = open(
-        new_path + "\\{0:02d}{1:02d}{2:02d}.log".format(datetime.datetime.now().hour, datetime.datetime.now().minute,
-                                                        datetime.datetime.now().second), 'a')
-    fileHandler.write("数据总字节数={0}，分为{1}帧\n".format(len(m_str), len(m_str) / FRAME_LENGTH))
-    for i in range(0, len(m_str), 1):
-        if i % 4 == 0:
-            fileHandler.write("\n")
-        if i % FRAME_LENGTH == 0:
-            fileHandler.write("第{0}帧==================\n".format(i / FRAME_LENGTH + 1))
-        fileHandler.write("[{0:02x}]".format(ord(m_str[i])))
-    fileHandler.close()
-
-
-def print_hex(m_str):
-    for i in range(0, len(m_str), 1):
-        print "{0:02X},".format(ord(m_str[i])),
-
-
-def handle_transdtl(transdtl, fid):
-    # print u"transdtl_len={0}".format(len(transdtl))
-    termseqno, cardno, lastcnt, lastlimamt, lastamount, lasttransflag, lasttermno, lastdatetime, cardbefbal, cardbefcnt, amount, \
-    extraamount, transdatetime, psamno, tac, transflag, reserve, crc = struct.unpack(TRANSDTL_CPY_STR, transdtl)
-    log_str = ""
-    tmp_str = u"\ntermseqno={0}\ncardno={1}\nlastcnt={2}\n".format(termseqno, cardno, lastcnt)
-    log_str += tmp_str
-    tmp_str = u"lastlimamt=[{0:02X}][{1:02x}][{2:02x}]\n".format(ord(lastlimamt[0]), ord(lastlimamt[1]),
-                                                                 ord(lastlimamt[2]))
-    log_str += tmp_str
-    tmp_str = u"lasttransflag={0:02x}\nlasttermno={1:02x}{2:02x}{3:02x}{4:02x}{5:02x}{6:02x}\n".format(lasttransflag,
-                                                                                                       ord(lasttermno[
-                                                                                                           0]), \
-                                                                                                       ord(lasttermno[
-                                                                                                           1]), ord(
-            lasttermno[2]), ord(lasttermno[3]), ord(lasttermno[4]), ord(lasttermno[5]))
-    log_str += tmp_str
-    tmp_str = u"lastdatetime={0:02x}{1:02x}{2:02x}{3:02x}{4:02x}{5:02x}\n".format(ord(lastdatetime[0]),
-                                                                                  ord(lastdatetime[1]),
-                                                                                  ord(lastdatetime[2]), \
-                                                                                  ord(lastdatetime[3]),
-                                                                                  ord(lastdatetime[4]),
-                                                                                  ord(lastdatetime[5]))
-    log_str += tmp_str
-    tmp_str = u"cardbefbal={0}\ncardbefcnt={1}\namount={2}\n".format(cardbefbal, cardbefcnt, amount)
-    log_str += tmp_str
-    tmp_str = u"extraamount=[{0:02x}][{1:02x}][{2:02x}]\n".format(ord(extraamount[0]), ord(extraamount[1]),
-                                                                  ord(extraamount[2]))
-    log_str += tmp_str
-    tmp_str = u"transdatetime={0:02x}{1:02x}{2:02x}{3:02x}{4:02x}{5:02x}\n".format(ord(transdatetime[0]),
-                                                                                   ord(transdatetime[1]),
-                                                                                   ord(transdatetime[2]),
-                                                                                   ord(transdatetime[3]),
-                                                                                   ord(transdatetime[4]),
-                                                                                   ord(transdatetime[5]))
-    log_str += tmp_str
-    tmp_str = u"psamno={0:02x}{1:02x}{2:02x}{3:02x}{4:02x}{5:02x}\n".format(ord(psamno[0]), ord(psamno[1]),
-                                                                            ord(psamno[2]), ord(psamno[3]),
-                                                                            ord(psamno[4]), ord(psamno[5]))
-    log_str += tmp_str
-    tmp_str = u"tac={0:02x}{1:02x}{2:02x}{3:02x}\ntransflag={4:02x}\nreserve={5:02x}{6:02x}\ncrc={7:02x}{8:02x}\n".format(
-        ord(tac[0]), ord(tac[1]), ord(tac[2]), ord(tac[3]),
-        transflag, ord(reserve[0]), ord(reserve[1]), ord(crc[0]), ord(crc[1]))
-    log_str += tmp_str
-    sp_transdtl_log(log_str, fid)
-    #打印
-    tmp_str = u"amount={4},tac={0:02X}{1:02X}{2:02X}{3:02X}".format(ord(tac[0]), ord(tac[1]), ord(tac[2]), ord(tac[3]),
-                                                                    amount)
-    #print tmp_str
-    tmp_str = u"收到一笔流水，transflag={0:02X}".format(transflag)
-    print tmp_str
-
-
-def print_can_data(data):
-    import time
-
-    print u"{0}  {1}".format(time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time())), data)
-
-
-def do_something_with_data(s, m_handler, fid):
-    # print u"==============处理数据：============="
-    # m_handler.print_data_list(fid)
-    m_tcp_unt = sp_tcp_unit()
-    index = m_handler.get_index_by_fid(fid)
-    if index < 0:
-        return False
-    data_valid_len = m_handler.data_list[index][1]
-    data = m_handler.data_list[index][2]
-    data = data[0:data_valid_len]
-    # print u"截取后的数据"
-    # print_hex(data)
-    # 解析数据
-    sp_brief_log(data, False)
-    m_tcp_unt.parse_data(data)
-    #print u"解析出data_len={0}".format(m_tcp_unt.data_len)
-    if m_tcp_unt.cmd_code == 0x01:
-        handle_transdtl(m_tcp_unt.data, fid)
-    elif m_tcp_unt.cmd_code == 0x02:
-        print_can_data(m_tcp_unt.data)
-    elif m_tcp_unt.cmd_code == 0x03:
-        print u"收到获取黑名单请求,len={0}".format(m_tcp_unt.data_len)
-    m_tcp_unt.data = "\x00\x09\x00\x09\x00\x09\x00\x09"
-    m_tcp_unt.data_len = m_tcp_unt.data_len / 2 + 1
-    data = m_tcp_unt.get_hd_buffer()
-    s.send(data)
-    sp_detail_log(data, True)
-
-
-def handle_recv_data(s, m_handler, buf):
-    if len(buf) == FRAME_LENGTH:
-        m_unt = sp_trans_unit()
-        m_unt.unpack_start_unit(buf)
-        m_handler.insert_into_list(s, m_unt, buf)
-    else:
-        print u"长度不对！len={0}".format(len(buf))
-
-
-def process_buffer(client, buffer, handler):
-    offset = 0
-    process_length = 0
-    buffer_len = len(buffer)
-    while offset < buffer_len:
-        if buffer_len - offset >= FRAME_LENGTH:
-            handle_recv_data(client, handler, buffer[offset: offset + FRAME_LENGTH])
-            process_length += FRAME_LENGTH
-        offset += FRAME_LENGTH
-    return process_length
-
-
+"""
 def recv_from_pos():
     host = "192.168.1.211"
     port = 6000
@@ -406,4 +220,4 @@ def recv_from_pos():
 
 if __name__ == "__main__":
     recv_from_pos()
-
+"""

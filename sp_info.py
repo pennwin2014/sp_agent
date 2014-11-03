@@ -1,0 +1,9 @@
+__author__ = 'Penn'
+
+
+DATA_HEADER_CPY_STR = "<3sBH2sI"
+DATA_HEADER_LEN = 12
+TRANSDTL_CPY_STR = "<IIH3sIB6s6sIHI3s6s6s4sB2s2s"  # "IIH3sIB6s6sIBI3s6s6s4sB2s2s144s"
+FLAG_SEND = True
+FLAG_RECV = False
+

@@ -33,11 +33,6 @@ setup(name="sp_can_reciever",
                           targetName="socket_svr.exe",
                           copyDependentFiles=True,
                           appendScriptToExe=False,
-                          appendScriptToLibrary=True),
-               Executable('sp_datalist.py',
-                          targetName="sp_datalist.exe",
-                          copyDependentFiles=True,
-                          appendScriptToExe=False,
                           appendScriptToLibrary=True)])
 
 
