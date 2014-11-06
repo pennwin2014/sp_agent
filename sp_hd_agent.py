@@ -67,16 +67,19 @@ class sp_hd_handler():
         tmp_str = u"amount={4},tac={0:02X}{1:02X}{2:02X}{3:02X}".format(ord(tac[0]), ord(tac[1]), ord(tac[2]),
                                                                         ord(tac[3]), amount)
         # print tmp_str
+        self.print_time()
         tmp_str = u"收到一笔流水，transflag={0:02X}".format(transflag)
         print tmp_str
         return termseqno
 
-
+    @staticmethod
+    def print_time():
+        import time
+        print u"{0}".format(time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))),
 
     def print_can_data(self, data):
-        import time
-
-        print u"{0}  data=".format(time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))),
+        self.print_time()
+        print "data="
         for i in range(0, len(data)):
             print "{0:02x}".format(ord(data[i])),
 
