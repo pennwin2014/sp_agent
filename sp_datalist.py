@@ -10,6 +10,7 @@ FLAG_SEND = True
 FLAG_RECV = False
 gloabal_log_handler = sp_log_handler.sp_log_handler()
 
+
 class sp_trans_unit:
     def __init__(self):
         self.flen = 0
@@ -33,6 +34,7 @@ class sp_trans_unit:
         else:
             self.flen, self.fid, self.fchecksum, \
             self.findex, self.fdatalen, self.fdata = struct.unpack("<2I2B2s4s", recv_data)
+
 
 class sp_datalist_handler:
     def __init__(self):
@@ -92,7 +94,7 @@ class sp_datalist_handler:
             # 如果数据长度拼起来是最后一个，则处理该数据并清空列表
             pass_unt.unpack_normal_unit(buf)
             ret = self.append_normal_data(pass_unt.fid, pass_unt.fdata)
-        if(ret != 2):
+        if (ret != 2):
             self.data_list[index].append(buf)
         return ret
 
@@ -125,6 +127,7 @@ class sp_datalist_handler:
         m_str = self.data_list[index][2]
         return m_str
 
+
 class sp_tcp_unit:
     def __init__(self):
         self.guide_code = '\x00\x00\x00'  # 引导码
@@ -156,6 +159,20 @@ class sp_tcp_unit:
         check_sum = struct.pack('B', tmp_sum)
         return check_sum
 
+    def sp_calc_crc8(self, data, len):
+        i = 0
+        crc = 0
+        cnt = 0
+        while len > 0:
+            len -= 1
+            crc ^= ord(data[cnt])
+            cnt += 1
+            for i in range(0, 8, 1):
+                if crc & 0x01 != 0:
+                    crc = (crc >> 1) ^ 0x8C
+                else:
+                    crc >>= 1
+        return crc
 
     def pack_one_frame(self, frame_len, check_sum, frame_index, data):
         pack_data = struct.pack(">H", frame_len + 2)
@@ -171,13 +188,20 @@ class sp_tcp_unit:
 
 
     def get_hd_buffer(self):
+        """
         data = '\x12\x23\x33\x44\x55\x66\x77\x88\x99\xAA\xBB\xCC\xDD\xEE\xFF\x12\x34\x56\x78\x9A\xBC\xDE\xF0'
         data *= 23
         """
-        data = struct.pack(DATA_HEADER_CPY_STR, self.guide_code, self.cmd_code, self.data_len, self.machine_addr, self.seqno)
+        print "check_sum={0:02x}".format(ord(self.check_sum))
+        data = struct.pack(DATA_HEADER_CPY_STR, self.guide_code, self.cmd_code, self.data_len, self.machine_addr,
+                           self.seqno)
         data += self.data
-        data += self.check_sum
-        """
+        for i in range(0, len(data), 1):
+            print "\\x{0:02x}".format(ord(data[i])),
+        self.check_sum = self.sp_calc_crc8(data, len(data))
+        print "check_sum2={0:02x}".format(self.check_sum)
+        pack_str = "<{0}sB".format(len(data))
+        data = struct.pack(pack_str, data, self.check_sum)
         gloabal_log_handler.sp_brief_log(data, FLAG_SEND)  # 记录发送日志
         # print u"组第一个帧前LEN= {0}".format(len(data))
         tmp_data = struct.pack("<H", len(data))
@@ -197,6 +221,7 @@ class sp_tcp_unit:
         # print "=======pack_data====="
         # print_hex(pack_data)
         return pack_data
+
 
 """
 def recv_from_pos():
