@@ -7,8 +7,8 @@ import os
 FRAME_LENGTH = 16
 
 class sp_log_handler:
-    def sp_transdtl_log(self, transdtl, fid):
-        path = u"transdtl_logs"
+    def sp_classify_log(self, path, transdtl, fid):
+        #path = u"transdtl_logs"
         new_path = path
         if not os.path.isdir(new_path):
             os.makedirs(new_path)

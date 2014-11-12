@@ -9,6 +9,7 @@ FRAME_LENGTH = 16
 DATA_HEADER_CPY_STR = "<3sBH2sI"
 DATA_HEADER_LEN = 12
 TRANSDTL_CPY_STR = "<IIH3sIB6s6sIHI3s6s6s4sB2s2s"  # "IIH3sIB6s6sIBI3s6s6s4sB2s2s144s"
+AUTH_CPY_STR = "<4s3s7s4s4s"
 FLAG_SEND = True
 FLAG_RECV = False
 gloabal_log_handler = sp_log_handler.sp_log_handler()
@@ -19,6 +20,27 @@ class sp_hd_handler():
         list_handler = sp_datalist.sp_datalist_handler()
         recieved_buffer = ""
 
+    def handle_auth(self, auth_data, fid):
+        print u"收到一次签到"
+        termno, soft_verno, cur_datetime, feerate_verno, syspara_verno = struct.unpack(AUTH_CPY_STR, auth_data)
+        log_str = ""
+        tmp_str = u"\ntermno={0:02x}{1:02x}{2:02x}{3:02x}\n".format(ord(termno[0]), ord(termno[1]), ord(termno[2]),
+                                                                    ord(termno[3]))
+        log_str += tmp_str
+        tmp_str = u"\nsoft_verno={0:02x}{1:02x}{2:02x}\n".format(ord(soft_verno[0]), ord(soft_verno[1]),
+                                                                 ord(soft_verno[2]))
+        log_str += tmp_str
+        tmp_str = u"\ncur_datetime={0:02x}{1:02x}{2:02x}{3:02x}{4:02x}{5:02x}{6:02x}\n".format(ord(cur_datetime[0]), ord(cur_datetime[1]),
+                                ord(cur_datetime[2]), ord(cur_datetime[3]), ord(cur_datetime[4]), ord(cur_datetime[5]), ord(cur_datetime[6]))
+        log_str += tmp_str
+        tmp_str = u"\nfeerate_verno={0:02x}{1:02x}{2:02x}{3:02x}\n".format(ord(feerate_verno[0]), ord(feerate_verno[1]),
+                                                                           ord(feerate_verno[2]), ord(feerate_verno[3]))
+        log_str += tmp_str
+        tmp_str = u"\nsyspara_verno={0:02x}{1:02x}{2:02x}{3:02x}\n".format(ord(syspara_verno[0]), ord(syspara_verno[1]),
+                                                                           ord(syspara_verno[2]), ord(syspara_verno[3]))
+        log_str += tmp_str
+        path = u"auth_logs"
+        gloabal_log_handler.sp_classify_log(path, log_str, fid)
 
     def handle_transdtl(self, transdtl, fid):
         # print u"transdtl_len={0}".format(len(transdtl))
@@ -29,6 +51,8 @@ class sp_hd_handler():
         log_str += tmp_str
         tmp_str = u"lastlimamt=[{0:02X}][{1:02x}][{2:02x}]\n".format(ord(lastlimamt[0]), ord(lastlimamt[1]),
                                                                      ord(lastlimamt[2]))
+        log_str += tmp_str
+        tmp_str = u"lastamt={0}\n".format(lastamount)
         log_str += tmp_str
         tmp_str = u"lasttransflag={0:02x}\nlasttermno={1:02x}{2:02x}{3:02x}{4:02x}{5:02x}{6:02x}\n".format(
             lasttransflag,
@@ -63,7 +87,8 @@ class sp_hd_handler():
             ord(tac[0]), ord(tac[1]), ord(tac[2]), ord(tac[3]), transflag, ord(reserve[0]), ord(reserve[1]),
             ord(crc[0]), ord(crc[1]))
         log_str += tmp_str
-        gloabal_log_handler.sp_transdtl_log(log_str, fid)
+        path = u"transdtl_logs"
+        gloabal_log_handler.sp_classify_log(path, log_str, fid)
         tmp_str = u"amount={4},tac={0:02X}{1:02X}{2:02X}{3:02X}".format(ord(tac[0]), ord(tac[1]), ord(tac[2]),
                                                                         ord(tac[3]), amount)
         # print tmp_str
@@ -75,6 +100,7 @@ class sp_hd_handler():
     @staticmethod
     def print_time():
         import time
+
         print u"{0}".format(time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))),
 
     def print_can_data(self, data):
@@ -101,11 +127,23 @@ class sp_hd_handler():
         if m_tcp_unt.cmd_code == 0x01:
             termseqno = self.handle_transdtl(m_tcp_unt.data, fid)
             m_tcp_unt.data = struct.pack("<BI", 6, termseqno)
-        elif m_tcp_unt.cmd_code == 0x02:
-            self.print_can_data(m_tcp_unt.data)
-            m_tcp_unt.data = "\x00\x09\x00\x09\x00\x09\x00\x09"
+        elif m_tcp_unt.cmd_code == 0x02:  # 签到
+            self.handle_auth(m_tcp_unt.data, fid)
+            import time
+            svrtime = time.strftime('%Y%m%d%H%M%S', time.localtime(time.time()))
+            import binascii
+            #是否需要更新时钟
+            send_data = "\x01"
+            #系统时钟
+            send_data += binascii.unhexlify(svrtime)
+            #费率版本号
+            send_data += "\x00\x00\x00\x05"
+            #主参数版本
+            send_data += "\x01\x00\x00\x03"
+            m_tcp_unt.data = send_data
         elif m_tcp_unt.cmd_code == 0x03:
             print u"收到获取黑名单请求,len={0}".format(m_tcp_unt.data_len)
+            self.print_can_data(m_tcp_unt.data)
             m_tcp_unt.data = "\x00\x09\x00\x09\x00\x09\x00\x09"
         m_tcp_unt.data_len = len(m_tcp_unt.data)
         data = m_tcp_unt.get_hd_buffer()
