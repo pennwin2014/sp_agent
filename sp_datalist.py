@@ -142,13 +142,15 @@ class sp_tcp_unit:
     def parse_data(self, data):
         self.guide_code, self.cmd_code, self.data_len, self.machine_addr, self.seqno = struct.unpack(
             DATA_HEADER_CPY_STR, data[0:DATA_HEADER_LEN])
-        print "data_len = {0}".format(self.data_len)
+        #print "data_len = {0}".format(self.data_len)
         self.data = data[DATA_HEADER_LEN:DATA_HEADER_LEN + self.data_len]
+        """
         print "data=",
         for i in range(0, self.data_len):
             print "{0:02x}".format(ord(self.data[i])),
+        """
         self.check_sum = data[DATA_HEADER_LEN + self.data_len]
-        print "\nchecksum={0:02x}".format(ord(self.check_sum))
+        #print "\nchecksum={0:02x}".format(ord(self.check_sum))
 
 
     @staticmethod
