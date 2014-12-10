@@ -35,11 +35,11 @@ class sp_hd_handler():
             #接收到的流水号
             self.recv_transdtl_no = 1
         #系统参数版本号
-        self.syspara_verno = 2
+        self.syspara_verno = 4
         #费率版本号
-        self.feerate_verno = 2
+        self.feerate_verno = 5
         #时间段参数版本号
-        self.timepara_verno = 2
+        self.timepara_verno = 3
 
 
     def handle_auth(self, auth_data, fid):
@@ -224,6 +224,11 @@ class sp_hd_handler():
             data += struct.pack("!B", 8)
             #工作模式
             data += struct.pack("!B", 1)
+            #系统时钟
+            import time
+            svrtime = time.strftime('%Y%m%d%H%M%S', time.localtime(time.time()))
+            import binascii
+            data += binascii.unhexlify(svrtime)
         elif cmd_code == 0x07:
             self.print_words(u"收到下载时间段参数")
             data = "\x10\x00\x11\x00\x00"
