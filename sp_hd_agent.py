@@ -9,6 +9,7 @@ FRAME_LENGTH = 16
 DATA_HEADER_CPY_STR = "<3sBH2sI"
 DATA_HEADER_LEN = 12
 TRANSDTL_CPY_STR = "<IIH3sIB6s6sIHI3s6s6s4sB2s2s"  # "IIH3sIB6s6sIBI3s6s6s4sB2s2s144s"
+TRUSSDTL_CPY_STR = "<I5sIIIIIII6s6s13s2s"
 AUTH_CPY_STR = "<4s3s7s4s4s"
 FLAG_SEND = True
 FLAG_RECV = False
@@ -35,9 +36,9 @@ class sp_hd_handler():
             #接收到的流水号
             self.recv_transdtl_no = 1
         #系统参数版本号
-        self.syspara_verno = 4
+        self.syspara_verno = 1
         #费率版本号
-        self.feerate_verno = 5
+        self.feerate_verno = 1
         #时间段参数版本号
         self.timepara_verno = 3
 
@@ -114,8 +115,41 @@ class sp_hd_handler():
         tmp_str = u"amount={4},tac={0:02X}{1:02X}{2:02X}{3:02X}".format(ord(tac[0]), ord(tac[1]), ord(tac[2]),
                                                                         ord(tac[3]), amount)
         # print tmp_str
-        self.print_words(u"收到一笔流水，transflag={0:02X}".format(transflag))
+        self.print_words(u"收到一笔流水，transflag={0:02X}，termseqno={1}".format(transflag, termseqno))
         return termseqno
+
+    def handle_trussdtl(self, trussdtl, fid):
+        # print u"trussdtl_len={0}".format(len(trussdtl))
+        trussno, trussdatetime, last_trussno, success_cnt, success_amt, fail_cnt, fail_amt, last_termseqno, end_termseqno, \
+        start_transtime, end_transtime, reverse, crc = struct.unpack(TRUSSDTL_CPY_STR, trussdtl)
+        log_str = ""
+        tmp_str = u"\ntrussno={0}\n".format(trussno)
+        log_str += tmp_str
+        self.print_words(u"收到一笔扎帐流水，{0}".format(tmp_str))
+        tmp_str = u"trussdatetime=[{0:02X}][{1:02x}][{2:02x}][{3:02x}][{4:02x}]\n".format(ord(trussdatetime[0]), ord(trussdatetime[1]),
+                                                                     ord(trussdatetime[2]), ord(trussdatetime[3]), ord(trussdatetime[4]))
+        log_str += tmp_str
+        tmp_str = u"last_termseqno={0}\n".format(last_termseqno)
+        log_str += tmp_str
+        tmp_str = u"end_termseqno={0}\n".format(end_termseqno)
+        log_str += tmp_str
+        tmp_str = u"start_transtime=[{0:02X}][{1:02x}][{2:02x}][{3:02x}][{4:02x}][{5:02x}]\n".format(ord(start_transtime[0]), ord(start_transtime[1]),
+                                                                     ord(start_transtime[2]), ord(start_transtime[3]), ord(start_transtime[4]), ord(start_transtime[5]))
+        log_str += tmp_str
+        tmp_str = u"end_transtime=[{0:02X}][{1:02x}][{2:02x}][{3:02x}][{4:02x}][{5:02x}]\n".format(ord(end_transtime[0]), ord(end_transtime[1]),
+                                                                     ord(end_transtime[2]), ord(end_transtime[3]), ord(end_transtime[4]), ord(end_transtime[5]))
+        log_str += tmp_str
+        tmp_str = u"success_cnt={0}\n".format(success_cnt)
+        log_str += tmp_str
+        tmp_str = u"success_amt={0}\n".format(success_amt)
+        log_str += tmp_str
+        tmp_str = u"fail_cnt={0}\n".format(fail_cnt)
+        log_str += tmp_str
+        tmp_str = u"fail_amt={0}\n".format(fail_amt)
+        log_str += tmp_str
+        path = u"trussdtl_logs"
+        gloabal_log_handler.sp_classify_log(path, log_str, fid)
+        return trussno
 
     @staticmethod
     def print_words(words):
@@ -134,12 +168,17 @@ class sp_hd_handler():
         if cmd_code == 0x00:
             self.print_words(u"收到链路检测")
             data = "\x00\x01\x03"
+        elif cmd_code == 0x09:#扎帐
+            trussno = self.handle_trussdtl(recv_data, fid)
+            self.recv_truss_no = trussno
+            retcode = 0
+            data = struct.pack("<BIs", retcode, trussno, '1')
         elif cmd_code == 0xD2:
             termseqno = self.handle_transdtl(recv_data, fid)
             self.recv_transdtl_no = termseqno
             retcode = 0
             data = struct.pack("<BIs", retcode, termseqno, '1')
-        elif cmd_code == 0xD3:  # 签到
+        elif cmd_code == 0xE1:  # 签到
             self.handle_auth(recv_data, fid)
             import time
             svrtime = time.strftime('%Y%m%d%H%M%S', time.localtime(time.time()))
@@ -229,6 +268,10 @@ class sp_hd_handler():
             svrtime = time.strftime('%Y%m%d%H%M%S', time.localtime(time.time()))
             import binascii
             data += binascii.unhexlify(svrtime)
+            #扎帐点,各两个字节
+            data += "\x10\x38"
+            data += "\x14\x30"
+            data += "\x17\x50"
         elif cmd_code == 0x07:
             self.print_words(u"收到下载时间段参数")
             data = "\x10\x00\x11\x00\x00"
