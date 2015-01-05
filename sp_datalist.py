@@ -35,11 +35,12 @@ class sp_trans_unit:
             keep_data1, self.flen, keep_data2, self.fid, self.fchecksum, \
             self.findex, self.fdatalen, self.fdata = struct.unpack("<sB2s4s2B2s4s", recv_data)
             self.fid = struct.unpack(">I", self.fid)[0]
+            """
             print "\n收到数据"
             for x in recv_data:
                 print "{0:02x}".format(ord(x)),
             print "本次帧长度={0},fid=0x{1:02x},findex={2}".format(self.flen, self.fid, self.findex)
-
+            """
 
 class sp_datalist_handler:
     def __init__(self):
@@ -145,19 +146,14 @@ class sp_tcp_unit:
         self.machine_addr = '\x00\x01'  # 机器地址
         self.seqno = 1
         self.data = ''
-        self.check_sum = '\x08'
-        self.canid = "\x00\x00\x00\x00"
+        self.check_sum = 0x08
+        self.canid = 0x00
 
     def parse_data(self, data):
         self.guide_code, self.cmd_code, self.data_len, self.machine_addr, self.seqno = struct.unpack(
             DATA_HEADER_CPY_STR, data[0:DATA_HEADER_LEN])
         #print "data_len = {0}".format(self.data_len)
         self.data = data[DATA_HEADER_LEN:DATA_HEADER_LEN + self.data_len]
-
-        print "data=",
-        for i in range(0, self.data_len):
-            print "{0:02x}".format(ord(self.data[i])),
-
         self.check_sum = data[DATA_HEADER_LEN + self.data_len]
         #print "\nchecksum={0:02x}".format(ord(self.check_sum))
 
@@ -202,18 +198,9 @@ class sp_tcp_unit:
 
 
     def get_hd_buffer(self):
-        """
-        data = '\x12\x23\x33\x44\x55\x66\x77\x88\x99\xAA\xBB\xCC\xDD\xEE\xFF\x12\x34\x56\x78\x9A\xBC\xDE\xF0'
-        data *= 23
-        print "check_sum={0:02x}".format(ord(self.check_sum))
-        """
         data = struct.pack(DATA_HEADER_CPY_STR, self.guide_code, self.cmd_code, self.data_len, self.machine_addr,
                            self.seqno)
         data += self.data
-        """
-        for i in range(0, len(data), 1):
-            print "\\x{0:02x}".format(ord(data[i])),
-        """
         self.check_sum = self.sp_calc_crc8(data, len(data))
         #print "check_sum2={0:02x}".format(self.check_sum)
         pack_str = "<{0}sB".format(len(data))
@@ -234,31 +221,4 @@ class sp_tcp_unit:
                 check_sum = self.get_check_sum(tmp_data, frame_index)
                 pack_data += self.pack_one_frame(len(tmp_data), check_sum, frame_index, tmp_data)
                 frame_index += 1
-        # print "=======pack_data====="
-        # print_hex(pack_data)
         return pack_data
-
-
-"""
-def recv_from_pos():
-    host = "192.168.1.211"
-    port = 6000
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.connect((host, port))
-    m_handler = sp_datalist_handler()
-    recieved_buffer = ""
-    while 1:
-        buf = s.recv(1024)
-        if not buf:
-            print u"buf 长度不为16或者16的倍数，为{0}".format(len(buf))
-            break
-        recieved_buffer += buf
-        process_length = process_buffer(s, recieved_buffer, m_handler)
-        if process_length > 0:
-            recieved_buffer = recieved_buffer[process_length:]
-    s.close()
-
-
-if __name__ == "__main__":
-    recv_from_pos()
-"""

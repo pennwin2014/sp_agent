@@ -28,8 +28,8 @@ def calc_check_sum(check_data, check_len):
 
 class sp_hd_handler():
     def __init__(self):
-        list_handler = sp_datalist.sp_datalist_handler()
-        recieved_buffer = ""
+        self.list_handler = sp_datalist.sp_datalist_handler()
+        self.recieved_buffer = ""
 
     @staticmethod
     def print_words(words):
@@ -73,14 +73,13 @@ class sp_hd_handler():
         result.append(chr(crc))  # crc
         return "".join(result)
 
-    def get_data_from_server(self, server,client, send_data,unt):
-        data = client.fetch(server,send_data,unt);
+    def get_data_from_server(self, server, client, send_data, unt):
+        data = client.fetch(server, send_data, unt)
         return data
 
-    def do_something_with_data(self, server,client, fid):
+    def do_something_with_data(self, server, client, fid):
         # print u"==============处理数据：============="
         # m_handler.print_data_list(fid)
-        m_tcp_unt = sp_datalist.sp_tcp_unit()
         index = self.list_handler.get_index_by_fid(fid)
         if index < 0:
             return False
@@ -88,12 +87,13 @@ class sp_hd_handler():
         data = self.list_handler.data_list[index][2]
         data = data[0:data_valid_len]
         # 解析数据
-        gloabal_log_handler.sp_brief_log(data, FLAG_RECV)
+        #gloabal_log_handler.sp_brief_log(data, FLAG_RECV)
+        m_tcp_unt = sp_datalist.sp_tcp_unit()
         m_tcp_unt.parse_data(data)
-        # print u"解析出data_len={0}".format(m_tcp_unt.data_len)
+        m_tcp_unt.canid = fid
+        print u"解析出cmd={0:02x}, data_len={0}".format(m_tcp_unt.cmd_code, m_tcp_unt.data_len)
         send_data = self.translate_to_sw_agent_fmt(m_tcp_unt)
-        print send_data
-        self.get_data_from_server(server,client,send_data,m_tcp_unt)
+        self.get_data_from_server(server, client, send_data, m_tcp_unt)
 
 
     def handle_recv_data(self, server,client, buf):
@@ -102,8 +102,10 @@ class sp_hd_handler():
             m_unt.unpack_start_unit(buf)
             if self.list_handler.insert_into_list(m_unt, buf) == 2:
                 # 处理接收到的请求，一般情况是转发并等待服务器回复
-                print "\nget full fid={0} req".format(m_unt.fid)
-                self.do_something_with_data(server,client, m_unt.fid)
+                import datetime
+                now_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
+                print u"\n得到完整fid=0x{0:02x}数据时间：{1}".format(m_unt.fid, now_time)
+                self.do_something_with_data(server, client, m_unt.fid)
                 # 清空该fid对应的列表的数据
                 self.list_handler.clear_list_elems(m_unt.fid)
         else:
