@@ -92,7 +92,7 @@ class sp_datalist_handler:
         return 0  # 未接收完整个请求
 
 
-    def insert_into_list(self, s, pass_unt, buf):
+    def insert_into_list(self, pass_unt, buf):
         index = self.get_index_by_fid(pass_unt.fid)
         if index < 0:
             self.create_new_list(pass_unt.fid)
