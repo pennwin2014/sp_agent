@@ -25,15 +25,20 @@ class sp_trans_unit:
         if len(recv_data) != FRAME_LENGTH:
             print "unpack_normal_unit len={0}".format(len(recv_data))
         else:
-            self.flen, self.fid, self.fchecksum, \
-            self.findex, self.fdata = struct.unpack("!2I2B6s", recv_data)
+            kd1, self.flen, kd2, self.fid, self.fchecksum, \
+            self.findex, self.fdata = struct.unpack("!sB2sI2B6s", recv_data)
 
     def unpack_start_unit(self, recv_data):
         if len(recv_data) != FRAME_LENGTH:
             print "unpack_start_unit len={0}".format(len(recv_data))
         else:
-            self.flen, self.fid, self.fchecksum, \
-            self.findex, self.fdatalen, self.fdata = struct.unpack("<2I2B2s4s", recv_data)
+            keep_data1, self.flen, keep_data2, self.fid, self.fchecksum, \
+            self.findex, self.fdatalen, self.fdata = struct.unpack("<sB2s4s2B2s4s", recv_data)
+            self.fid = struct.unpack(">I", self.fid)[0]
+            print "\n收到数据"
+            for x in recv_data:
+                print "{0:02x}".format(ord(x)),
+            print "本次帧长度={0},fid=0x{1:02x},findex={2}".format(self.flen, self.fid, self.findex)
 
 
 class sp_datalist_handler:
@@ -58,10 +63,14 @@ class sp_datalist_handler:
 
 
     def append_first_data(self, fid, fdatalen, fdata):
+        import datetime
+        print "\n"+"="*80+"\n"
+        print u"收到fid=0x{0:02x}第一帧时间：{1}".format(fid, datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")),
         index = self.get_index_by_fid(fid)
         if index < 0:
             return 1  # 该帧id对应的列表不存在
         total_len = struct.unpack('<H', fdatalen)[0]
+        print u"数据长度=[{0}]".format(total_len)
         total_data = fdata
         self.data_list[index] = [fid, total_len, total_data]
         if total_len == 4:
@@ -94,7 +103,7 @@ class sp_datalist_handler:
             # 如果数据长度拼起来是最后一个，则处理该数据并清空列表
             pass_unt.unpack_normal_unit(buf)
             ret = self.append_normal_data(pass_unt.fid, pass_unt.fdata)
-        if (ret != 2):
+        if ret != 2:
             self.data_list[index].append(buf)
         return ret
 
@@ -144,11 +153,11 @@ class sp_tcp_unit:
             DATA_HEADER_CPY_STR, data[0:DATA_HEADER_LEN])
         #print "data_len = {0}".format(self.data_len)
         self.data = data[DATA_HEADER_LEN:DATA_HEADER_LEN + self.data_len]
-        """
+
         print "data=",
         for i in range(0, self.data_len):
             print "{0:02x}".format(ord(self.data[i])),
-        """
+
         self.check_sum = data[DATA_HEADER_LEN + self.data_len]
         #print "\nchecksum={0:02x}".format(ord(self.check_sum))
 
@@ -156,8 +165,8 @@ class sp_tcp_unit:
     @staticmethod
     def get_check_sum(data, frame_index):
         tmp_sum = frame_index
-        for i in range(0, len(data), 1):
-            tmp_sum ^= ord(data[i])
+        for x in data:
+            tmp_sum ^= ord(x)
         check_sum = struct.pack('B', tmp_sum)
         return check_sum
 
@@ -177,9 +186,12 @@ class sp_tcp_unit:
         return crc
 
     def pack_one_frame(self, frame_len, check_sum, frame_index, data):
-        pack_data = struct.pack(">H", frame_len + 2)
-        pack_data += "\x00\x00"
-        pack_data += self.canid
+        #pack_data = struct.pack(">sH2sIBB"+len(data)+"s"+FRAME_LENGTH-len(data)-10+"s")
+        #
+        pack_data = struct.pack("B", 0)
+        pack_data += struct.pack(">B", frame_len + 2)
+        pack_data += struct.pack(">H", 0)
+        pack_data += struct.pack(">I", self.canid)
         pack_data += check_sum
         findex = struct.pack("B", frame_index)
         pack_data += findex
@@ -193,15 +205,17 @@ class sp_tcp_unit:
         """
         data = '\x12\x23\x33\x44\x55\x66\x77\x88\x99\xAA\xBB\xCC\xDD\xEE\xFF\x12\x34\x56\x78\x9A\xBC\xDE\xF0'
         data *= 23
-        """
         print "check_sum={0:02x}".format(ord(self.check_sum))
+        """
         data = struct.pack(DATA_HEADER_CPY_STR, self.guide_code, self.cmd_code, self.data_len, self.machine_addr,
                            self.seqno)
         data += self.data
+        """
         for i in range(0, len(data), 1):
             print "\\x{0:02x}".format(ord(data[i])),
+        """
         self.check_sum = self.sp_calc_crc8(data, len(data))
-        print "check_sum2={0:02x}".format(self.check_sum)
+        #print "check_sum2={0:02x}".format(self.check_sum)
         pack_str = "<{0}sB".format(len(data))
         data = struct.pack(pack_str, data, self.check_sum)
         gloabal_log_handler.sp_brief_log(data, FLAG_SEND)  # 记录发送日志
